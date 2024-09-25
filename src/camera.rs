@@ -5,6 +5,10 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
+const FOV_Y: f32 = f32::consts::FRAC_PI_4;
+const NEAR: f32 = 1.0;
+const FAR: f32 = 1000.0;
+
 #[derive(Debug)]
 pub struct Camera {
     pub eye: glam::Vec3,
@@ -97,10 +101,30 @@ impl Camera {
     pub fn clip_from_world(&self, config: &wgpu::SurfaceConfiguration) -> glam::Mat4 {
         let view = glam::Mat4::look_to_rh(self.eye, self.dir, glam::Vec3::Y);
         let proj = glam::Mat4::perspective_rh(
-            f32::consts::FRAC_PI_4,
+            FOV_Y,
             config.width as f32 / config.height as f32,
-            1.0,
-            1000.0,
+            NEAR,
+            FAR,
+        );
+
+        proj * view
+    }
+
+    pub fn clip_from_world_with_margin(
+        &self,
+        config: &wgpu::SurfaceConfiguration,
+        margin: f32,
+    ) -> glam::Mat4 {
+        let dist = margin / (FOV_Y / 2.0).sin();
+
+        let eye = self.eye - self.dir * dist;
+
+        let view = glam::Mat4::look_to_rh(eye, self.dir, glam::Vec3::Y);
+        let proj = glam::Mat4::perspective_rh(
+            FOV_Y,
+            config.width as f32 / config.height as f32,
+            NEAR + dist,
+            FAR + dist + margin,
         );
 
         proj * view

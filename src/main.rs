@@ -243,6 +243,8 @@ impl ApplicationHandler for App {
                     &mut encoder,
                     &self.blocks,
                     self.camera.eye,
+                    self.camera
+                        .clip_from_world_with_margin(&self.config, 0.5 * 2.0f32.sqrt()),
                     &self.draw_indirect_buffer,
                 );
                 self.faces_pipeline.encode(

@@ -10,6 +10,9 @@ var<storage, read_write> cursor: atomic<u32>;
 @group(0)
 @binding(3)
 var<storage> eye: vec3<f32>;
+@group(0)
+@binding(4)
+var<storage> clip_from_world_with_margin: mat4x4<f32>;
 
 fn blockPos(block: u32) -> vec3<u32> {
     return vec3(
@@ -53,16 +56,23 @@ fn generateFaces(
         let pos = blockPos(block);
         let mid = vec3<f32>(pos) + vec3(0.5);
 
-        for (var i = 0u; i < 6; i++) {
-            var axis_array = array(0.0, 0.0, 0.0);
-            axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
+        let clip_mid_h = clip_from_world_with_margin * vec4(mid, 1.0);
+        let clip_mid = clip_mid_h.xyz / clip_mid_h.w;
 
-            let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
-            let origin = fma(axis, vec3(0.5), mid);
+        let max_dist = max(abs(clip_mid.x), max(abs(clip_mid.y), abs(clip_mid.z)));
 
-            if dot(normalize(eye - origin), axis) > 0.0 {
-                let fi = atomicAdd(&workgroup_cursor, 1u);
-                workgroup_faces[fi] = newFace(pos, i);
+        if max_dist <= 1.0 {
+            for (var i = 0u; i < 6; i++) {
+                var axis_array = array(0.0, 0.0, 0.0);
+                axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
+
+                let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
+                let origin = fma(axis, vec3(0.5), mid);
+
+                if dot(normalize(eye - origin), axis) > 0.0 {
+                    let fi = atomicAdd(&workgroup_cursor, 1u);
+                    workgroup_faces[fi] = newFace(pos, i);
+                }
             }
         }
     }

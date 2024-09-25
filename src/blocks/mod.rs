@@ -53,6 +53,7 @@ impl BlocksPipeline {
         encoder: &mut wgpu::CommandEncoder,
         blocks: &[u32],
         eye: glam::Vec3,
+        clip_from_world_with_margin: glam::Mat4,
         draw_indirect_buffer: &wgpu::Buffer,
     ) -> wgpu::Buffer {
         let block_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -77,6 +78,12 @@ impl BlocksPipeline {
             contents: bytemuck::bytes_of(glam::Vec3A::from(eye).as_ref()),
             usage: wgpu::BufferUsages::STORAGE,
         });
+        let clip_from_world_with_margin_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("clip_from_world_with_margin_buffer"),
+                contents: bytemuck::bytes_of(clip_from_world_with_margin.as_ref()),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         let blocks_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("blocks_bind_group"),
@@ -97,6 +104,10 @@ impl BlocksPipeline {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: eye_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: clip_from_world_with_margin_buffer.as_entire_binding(),
                 },
             ],
         });
