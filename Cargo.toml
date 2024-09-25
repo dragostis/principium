@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bytemuck = "1.18.0"
+glam = "0.29.0"
 pollster = "0.3.0"
 wgpu = "22.1.0"
 winit = "0.30.5"

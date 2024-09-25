@@ -1,15 +1,24 @@
 use std::{
     borrow::Cow,
+    mem,
+    num::NonZero,
     ops::{Deref, DerefMut},
     sync::Arc,
+    time::Instant,
 };
 
+use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowId},
+    keyboard::{KeyCode, PhysicalKey},
+    window::{CursorGrabMode, Window, WindowId},
 };
+
+mod camera;
+
+use camera::Camera;
 
 #[derive(Debug)]
 struct Inner {
@@ -18,7 +27,10 @@ struct Inner {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+    triangle_bind_group_layout: wgpu::BindGroupLayout,
     triangle_render_pipeline: wgpu::RenderPipeline,
+    camera: Camera,
+    last_inst: Option<Instant>,
 }
 
 impl Inner {
@@ -59,10 +71,27 @@ impl Inner {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("triangle.wgsl"))),
         });
 
+        let triangle_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("triangle_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(
+                            NonZero::new(mem::size_of::<glam::Mat4>() as u64).unwrap(),
+                        ),
+                    },
+                    count: None,
+                }],
+            });
+
         let triangle_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("triangle_pipeline_layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&triangle_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -97,13 +126,23 @@ impl Inner {
             .unwrap();
         surface.configure(&device, &config);
 
+        let camera = Camera::default();
+
+        window
+            .set_cursor_grab(CursorGrabMode::Locked)
+            .unwrap_or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined).unwrap());
+        window.set_cursor_visible(false);
+
         Self {
             window,
             device,
             queue,
             surface,
             config,
+            triangle_bind_group_layout,
             triangle_render_pipeline,
+            camera,
+            last_inst: None,
         }
     }
 }
@@ -136,17 +175,40 @@ impl ApplicationHandler for App {
         self.inner = Some(pollster::block_on(Inner::new(window)));
     }
 
-    fn suspended(&mut self, event_loop: &ActiveEventLoop) {
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
         self.inner = None;
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => self.camera.handle_mouse_motion(delta),
+            _ => (),
+        }
     }
 
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
         match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                        state: ElementState::Pressed,
+                        repeat: false,
+                        ..
+                    },
+                ..
+            } => event_loop.exit(),
+            WindowEvent::KeyboardInput { event, .. } => self.camera.handle_key_event(event),
             WindowEvent::Resized(new_size) => {
                 self.config.width = new_size.width.max(1);
                 self.config.height = new_size.height.max(1);
@@ -155,6 +217,26 @@ impl ApplicationHandler for App {
                 self.window.request_redraw();
             }
             WindowEvent::RedrawRequested => {
+                let now = Instant::now();
+                let dt = self
+                    .last_inst
+                    .map(|last_inst| now - last_inst)
+                    .unwrap_or_default();
+
+                self.last_inst = Some(now);
+
+                self.camera.update(dt);
+
+                let clip_from_world =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("clip_from_world"),
+                            contents: bytemuck::cast_slice(
+                                self.camera.clip_from_world(&self.config).as_ref(),
+                            ),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        });
+
                 let frame = self
                     .surface
                     .get_current_texture()
@@ -168,6 +250,16 @@ impl ApplicationHandler for App {
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                 {
+                    let triangle_bind_group =
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("triangle_bind_group"),
+                            layout: &self.triangle_bind_group_layout,
+                            entries: &[wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: clip_from_world.as_entire_binding(),
+                            }],
+                        });
+
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -183,12 +275,15 @@ impl ApplicationHandler for App {
                         occlusion_query_set: None,
                     });
                     rpass.set_pipeline(&self.triangle_render_pipeline);
+                    rpass.set_bind_group(0, &triangle_bind_group, &[]);
                     rpass.draw(0..3, 0..1);
                 }
 
                 self.queue.submit(Some(encoder.finish()));
 
                 frame.present();
+
+                self.window.request_redraw();
             }
             WindowEvent::CloseRequested => event_loop.exit(),
             _ => (),
