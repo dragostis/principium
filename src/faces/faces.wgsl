@@ -8,15 +8,15 @@ var<uniform> clip_from_world: mat4x4<f32>;
 fn vertexPos(face: u32, local_vertex_index: u32) -> array<vec3<f32>, 2> {
     let block_pos = vec3(
         f32(extractBits(face, 0u, 4u)),
-        f32(extractBits(face, 4u, 4u)),
-        f32(extractBits(face, 8u, 4u)),
+        f32(extractBits(face, 4u, 9u)),
+        f32(extractBits(face, 13u, 4u)),
     );
 
     var local_pos = array(0.0, 0.0, 0.0);
 
-    let axis = extractBits(face, 13u, 2u);
+    let axis = extractBits(face, 18u, 2u);
 
-    local_pos[axis] = f32(extractBits(face, 12u, 1u));
+    local_pos[axis] = f32(extractBits(face, 17u, 1u));
     local_pos[(axis + 1) % 3] = f32(extractBits(local_vertex_index, 0u, 1u));
     local_pos[(axis + 2) % 3] = f32(extractBits(local_vertex_index, 1u, 1u)
         | u32(local_vertex_index == 4));
@@ -25,7 +25,7 @@ fn vertexPos(face: u32, local_vertex_index: u32) -> array<vec3<f32>, 2> {
 
     var norm = array(0.0, 0.0, 0.0);
 
-    norm[axis] = select(-1.0, 1.0, bool(extractBits(face, 12u, 1u)));
+    norm[axis] = select(-1.0, 1.0, bool(extractBits(face, 17u, 1u)));
 
     return array(pos, vec3(norm[0], norm[1], norm[2]));
 }

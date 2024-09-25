@@ -276,24 +276,22 @@ fn main() {
 
     let chunk = Chunk::from_bytes(&data).unwrap();
 
-    let mut min = isize::MAX;
     let mut max = isize::MIN;
     for x in 0..16 {
         for z in 0..16 {
             let h = chunk.surface_height(x, z, HeightMode::Trust);
 
-            min = min.min(h);
             max = max.max(h);
         }
     }
 
     let mut blocks = Vec::new();
     for x in 0..16 {
-        for y in min..=max {
+        for y in -64..=max {
             for z in 0..16 {
                 if let Some(block) = chunk.block(x, y, z) {
                     if block.name() != "minecraft:air" {
-                        blocks.push((z << 8) as u32 | ((y - min) << 4) as u32 | x as u32);
+                        blocks.push((z << 13) as u32 | ((y + 64) << 4) as u32 | x as u32);
                     }
                 }
             }

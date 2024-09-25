@@ -100,7 +100,7 @@ impl Camera {
             f32::consts::FRAC_PI_4,
             config.width as f32 / config.height as f32,
             1.0,
-            100.0,
+            1000.0,
         );
 
         proj * view
