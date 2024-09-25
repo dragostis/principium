@@ -44,12 +44,14 @@ fn generateFaces(
 
     workgroupBarrier();
 
-    let block = blocks[global_id.x];
-    let pos = blockPos(block);
+    if global_id.x < arrayLength(&blocks) {
+        let block = blocks[global_id.x];
+        let pos = blockPos(block);
 
-    for (var i = 0u; i < 6; i++) {
-        let fi = atomicAdd(&workgroup_cursor, 1u);
-        workgroup_faces[fi] = newFace(pos, i);
+        for (var i = 0u; i < 6; i++) {
+            let fi = atomicAdd(&workgroup_cursor, 1u);
+            workgroup_faces[fi] = newFace(pos, i);
+        }
     }
 
     workgroupBarrier();

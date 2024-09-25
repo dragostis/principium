@@ -128,7 +128,7 @@ impl DerefMut for App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = event_loop
-            .create_window(Window::default_attributes())
+            .create_window(Window::default_attributes().with_maximized(true))
             .unwrap();
 
         self.inner = Some(pollster::block_on(Inner::new(window)));

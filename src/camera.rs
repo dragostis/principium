@@ -15,9 +15,11 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
+        let eye = glam::Vec3::new(0.0, 2.0, 10.0);
+
         Self {
-            eye: glam::Vec3::new(0.0, 1.0, 2.0),
-            dir: glam::Vec3::NEG_Z,
+            eye,
+            dir: -eye.normalize(),
             vel: glam::Vec3::ZERO,
             cursor_pos_delta: glam::Vec2::ZERO,
         }
