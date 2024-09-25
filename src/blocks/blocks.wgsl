@@ -28,9 +28,10 @@ fn newFace(pos: vec3<u32>, i: u32) -> u32 {
 }
 
 const WORKGROUP_SIZE = 256u;
+const FACES_LEN = WORKGROUP_SIZE * 6;
 
 var<workgroup> workgroup_cursor: atomic<u32>;
-var<workgroup> workgroup_faces: array<u32, WORKGROUP_SIZE>;
+var<workgroup> workgroup_faces: array<u32, FACES_LEN>;
 
 @compute
 @workgroup_size(WORKGROUP_SIZE)
@@ -65,9 +66,12 @@ fn generateFaces(
 
     workgroupBarrier();
 
-    if local_index < len {
-        let i = atomicLoad(&workgroup_cursor) + local_index;
-        faces[i] = workgroup_faces[local_index];
+    for (var wg = 0u; wg < FACES_LEN; wg += WORKGROUP_SIZE) {
+        let i = local_index + wg;
+        if i < len {
+            let fi = atomicLoad(&workgroup_cursor) + i;
+            faces[fi] = workgroup_faces[i];
+        }
     }
 }
 

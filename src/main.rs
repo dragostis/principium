@@ -1,10 +1,13 @@
 use std::{
-    mem,
+    env,
+    fs::File,
+    isize, mem,
     ops::{Deref, DerefMut},
     sync::Arc,
     time::Instant,
 };
 
+use fastanvil::{complete::Chunk, Chunk as _, HeightMode, Region};
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
@@ -125,6 +128,7 @@ impl Inner {
 
 #[derive(Debug, Default)]
 struct App {
+    blocks: Vec<u32>,
     inner: Option<Inner>,
 }
 
@@ -237,7 +241,7 @@ impl ApplicationHandler for App {
                 let face_buffer = self.blocks_pipeline.encode(
                     &self.device,
                     &mut encoder,
-                    &[0, 1, 2, 5],
+                    &self.blocks,
                     &self.draw_indirect_buffer,
                 );
                 self.faces_pipeline.encode(
@@ -263,9 +267,45 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
+    let path = env::args().nth(1).expect("provide .mca path as arg");
+
+    let file = File::open(path).unwrap();
+
+    let mut region = Region::from_stream(file).unwrap();
+    let data = region.read_chunk(2, 0).unwrap().unwrap();
+
+    let chunk = Chunk::from_bytes(&data).unwrap();
+
+    let mut min = isize::MAX;
+    let mut max = isize::MIN;
+    for x in 0..16 {
+        for z in 0..16 {
+            let h = chunk.surface_height(x, z, HeightMode::Trust);
+
+            min = min.min(h);
+            max = max.max(h);
+        }
+    }
+
+    let mut blocks = Vec::new();
+    for x in 0..16 {
+        for y in min..=max {
+            for z in 0..16 {
+                if let Some(block) = chunk.block(x, y, z) {
+                    if block.name() != "minecraft:air" {
+                        blocks.push((z << 8) as u32 | ((y - min) << 4) as u32 | x as u32);
+                    }
+                }
+            }
+        }
+    }
+
     EventLoop::with_user_event()
         .build()
         .unwrap()
-        .run_app(&mut App::default())
+        .run_app(&mut App {
+            blocks,
+            inner: None,
+        })
         .unwrap();
 }
