@@ -26,6 +26,7 @@ struct Inner {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+    depth_texture: wgpu::Texture,
     draw_indirect_buffer: wgpu::Buffer,
     blocks_pipeline: BlocksPipeline,
     faces_pipeline: FacesPipeline,
@@ -84,6 +85,21 @@ impl Inner {
             .unwrap();
         surface.configure(&device, &config);
 
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("depth_texture"),
+            size: wgpu::Extent3d {
+                width: size.width,
+                height: size.height,
+                ..Default::default()
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24Plus,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
         let camera = Camera::default();
 
         window
@@ -97,6 +113,7 @@ impl Inner {
             queue,
             surface,
             config,
+            depth_texture,
             draw_indirect_buffer,
             blocks_pipeline,
             faces_pipeline,
@@ -173,6 +190,22 @@ impl ApplicationHandler for App {
                 self.config.height = new_size.height.max(1);
                 self.surface.configure(&self.device, &self.config);
 
+                self.depth_texture.destroy();
+                self.depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("depth_texture"),
+                    size: wgpu::Extent3d {
+                        width: new_size.width,
+                        height: new_size.height,
+                        ..Default::default()
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Depth24Plus,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                });
+
                 self.window.request_redraw();
             }
             WindowEvent::RedrawRequested => {
@@ -190,8 +223,11 @@ impl ApplicationHandler for App {
                     .surface
                     .get_current_texture()
                     .expect("Failed to acquire next swap chain texture");
-                let view = frame
+                let color_view = frame
                     .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+                let depth_view = self
+                    .depth_texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
                 let mut encoder = self
@@ -210,7 +246,8 @@ impl ApplicationHandler for App {
                     &face_buffer,
                     self.camera.clip_from_world(&self.config),
                     &self.draw_indirect_buffer,
-                    &view,
+                    &color_view,
+                    &depth_view,
                 );
 
                 self.queue.submit(Some(encoder.finish()));

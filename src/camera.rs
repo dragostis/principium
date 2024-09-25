@@ -19,7 +19,7 @@ impl Default for Camera {
 
         Self {
             eye,
-            dir: -eye.normalize(),
+            dir: glam::Vec3::NEG_Z,
             vel: glam::Vec3::ZERO,
             cursor_pos_delta: glam::Vec2::ZERO,
         }
@@ -90,9 +90,8 @@ impl Camera {
             .clamp(-f32::consts::PI / 2.0, f32::consts::PI / 2.0);
         let yaw = -self.cursor_pos_delta.x * RADIANS_PER_DOT;
 
-        self.cursor_pos_delta = glam::Vec2::ZERO;
-
-        self.dir = glam::Quat::from_euler(glam::EulerRot::ZYX, 0.0, yaw, pitch).mul_vec3(self.dir);
+        self.dir = glam::Quat::from_euler(glam::EulerRot::ZYX, 0.0, yaw, pitch)
+            .mul_vec3(glam::Vec3::NEG_Z);
     }
 
     pub fn clip_from_world(&self, config: &wgpu::SurfaceConfiguration) -> glam::Mat4 {

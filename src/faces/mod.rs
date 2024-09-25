@@ -65,7 +65,13 @@ impl FacesPipeline {
                 targets: &[Some(swapchain_format.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
@@ -84,7 +90,8 @@ impl FacesPipeline {
         face_buffer: &wgpu::Buffer,
         clip_from_world: glam::Mat4,
         draw_indirect_buffer: &wgpu::Buffer,
-        view: &TextureView,
+        color_view: &TextureView,
+        depth_view: &TextureView,
     ) {
         let clip_from_world_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("clip_from_world_buffer"),
@@ -111,14 +118,21 @@ impl FacesPipeline {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("faces_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
