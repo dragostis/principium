@@ -52,6 +52,7 @@ impl BlocksPipeline {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         blocks: &[u32],
+        eye: glam::Vec3,
         draw_indirect_buffer: &wgpu::Buffer,
     ) -> wgpu::Buffer {
         let block_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -61,7 +62,7 @@ impl BlocksPipeline {
         });
         let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("face_buffer"),
-            size: (blocks.len() * 6 * mem::size_of::<u32>()) as u64,
+            size: (blocks.len() * 3 * mem::size_of::<u32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -70,6 +71,11 @@ impl BlocksPipeline {
             size: mem::size_of::<u32>() as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
+        });
+        let eye_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("eye_buffer"),
+            contents: bytemuck::bytes_of(glam::Vec3A::from(eye).as_ref()),
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let blocks_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -87,6 +93,10 @@ impl BlocksPipeline {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: cursor_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: eye_buffer.as_entire_binding(),
                 },
             ],
         });

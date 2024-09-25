@@ -7,7 +7,7 @@ use winit::{
 
 #[derive(Debug)]
 pub struct Camera {
-    eye: glam::Vec3,
+    pub eye: glam::Vec3,
     dir: glam::Vec3,
     vel: glam::Vec3,
     cursor_pos_delta: glam::Vec2,

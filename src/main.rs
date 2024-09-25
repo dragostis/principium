@@ -242,6 +242,7 @@ impl ApplicationHandler for App {
                     &self.device,
                     &mut encoder,
                     &self.blocks,
+                    self.camera.eye,
                     &self.draw_indirect_buffer,
                 );
                 self.faces_pipeline.encode(

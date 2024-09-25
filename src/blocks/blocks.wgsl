@@ -7,6 +7,9 @@ var<storage, read_write> faces: array<u32>;
 @group(0)
 @binding(2)
 var<storage, read_write> cursor: atomic<u32>;
+@group(0)
+@binding(3)
+var<storage> eye: vec3<f32>;
 
 fn blockPos(block: u32) -> vec3<u32> {
     return vec3(
@@ -48,10 +51,19 @@ fn generateFaces(
     if global_id.x < arrayLength(&blocks) {
         let block = blocks[global_id.x];
         let pos = blockPos(block);
+        let mid = vec3<f32>(pos) + vec3(0.5);
 
         for (var i = 0u; i < 6; i++) {
-            let fi = atomicAdd(&workgroup_cursor, 1u);
-            workgroup_faces[fi] = newFace(pos, i);
+            var axis_array = array(0.0, 0.0, 0.0);
+            axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
+
+            let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
+            let origin = fma(axis, vec3(0.5), mid);
+
+            if dot(normalize(eye - origin), axis) > 0.0 {
+                let fi = atomicAdd(&workgroup_cursor, 1u);
+                workgroup_faces[fi] = newFace(pos, i);
+            }
         }
     }
 
