@@ -1,13 +1,10 @@
 use std::{
-    borrow::Cow,
     mem,
-    num::NonZero,
     ops::{Deref, DerefMut},
     sync::Arc,
     time::Instant,
 };
 
-use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
@@ -16,9 +13,11 @@ use winit::{
     window::{CursorGrabMode, Window, WindowId},
 };
 
+mod blocks;
 mod camera;
+mod faces;
 
-use camera::Camera;
+use crate::{blocks::BlocksPipeline, camera::Camera, faces::FacesPipeline};
 
 #[derive(Debug)]
 struct Inner {
@@ -27,8 +26,9 @@ struct Inner {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
-    triangle_bind_group_layout: wgpu::BindGroupLayout,
-    triangle_render_pipeline: wgpu::RenderPipeline,
+    draw_indirect_buffer: wgpu::Buffer,
+    blocks_pipeline: BlocksPipeline,
+    faces_pipeline: FacesPipeline,
     camera: Camera,
     last_inst: Option<Instant>,
 }
@@ -66,60 +66,18 @@ impl Inner {
             .await
             .expect("Failed to create device");
 
-        let triangle_shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("triangle_shader_module"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("triangle.wgsl"))),
-        });
-
-        let triangle_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("triangle_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(
-                            NonZero::new(mem::size_of::<glam::Mat4>() as u64).unwrap(),
-                        ),
-                    },
-                    count: None,
-                }],
-            });
-
-        let triangle_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("triangle_pipeline_layout"),
-                bind_group_layouts: &[&triangle_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let swapchain_format = swapchain_capabilities.formats[0];
 
-        let triangle_render_pipeline =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("triangle_render_pipeline"),
-                layout: Some(&triangle_pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &triangle_shader_module,
-                    entry_point: "vs_main",
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &triangle_shader_module,
-                    entry_point: "fs_main",
-                    compilation_options: Default::default(),
-                    targets: &[Some(swapchain_format.into())],
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-                cache: None,
-            });
+        let blocks_pipeline = BlocksPipeline::new(&device);
+        let faces_pipeline = FacesPipeline::new(&device, swapchain_format);
+
+        let draw_indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("draw_indirect_buffer"),
+            size: mem::size_of::<wgpu::util::DrawIndirectArgs>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        });
 
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
@@ -139,8 +97,9 @@ impl Inner {
             queue,
             surface,
             config,
-            triangle_bind_group_layout,
-            triangle_render_pipeline,
+            draw_indirect_buffer,
+            blocks_pipeline,
+            faces_pipeline,
             camera,
             last_inst: None,
         }
@@ -227,16 +186,6 @@ impl ApplicationHandler for App {
 
                 self.camera.update(dt);
 
-                let clip_from_world =
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("clip_from_world"),
-                            contents: bytemuck::cast_slice(
-                                self.camera.clip_from_world(&self.config).as_ref(),
-                            ),
-                            usage: wgpu::BufferUsages::UNIFORM,
-                        });
-
                 let frame = self
                     .surface
                     .get_current_texture()
@@ -249,35 +198,20 @@ impl ApplicationHandler for App {
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-                {
-                    let triangle_bind_group =
-                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("triangle_bind_group"),
-                            layout: &self.triangle_bind_group_layout,
-                            entries: &[wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: clip_from_world.as_entire_binding(),
-                            }],
-                        });
-
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: None,
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    });
-                    rpass.set_pipeline(&self.triangle_render_pipeline);
-                    rpass.set_bind_group(0, &triangle_bind_group, &[]);
-                    rpass.draw(0..3, 0..1);
-                }
+                let face_buffer = self.blocks_pipeline.encode(
+                    &self.device,
+                    &mut encoder,
+                    &[0, 1, 2, 5],
+                    &self.draw_indirect_buffer,
+                );
+                self.faces_pipeline.encode(
+                    &self.device,
+                    &mut encoder,
+                    &face_buffer,
+                    self.camera.clip_from_world(&self.config),
+                    &self.draw_indirect_buffer,
+                    &view,
+                );
 
                 self.queue.submit(Some(encoder.finish()));
 
