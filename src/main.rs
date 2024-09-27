@@ -17,10 +17,14 @@ use winit::{
 
 mod blocks;
 mod camera;
+mod chunks;
 mod faces;
 mod region;
 
-use crate::{blocks::BlocksPipeline, camera::Camera, faces::FacesPipeline, region::Region};
+use crate::{
+    blocks::BlocksPipeline, camera::Camera, chunks::ChunksPipeline, faces::FacesPipeline,
+    region::Region,
+};
 
 #[derive(Debug)]
 struct Inner {
@@ -30,6 +34,8 @@ struct Inner {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     depth_texture: wgpu::Texture,
+    blocks_indirect_buffer: wgpu::Buffer,
+    chunks_pipeline: ChunksPipeline,
     draw_indirect_buffer: wgpu::Buffer,
     blocks_pipeline: BlocksPipeline,
     faces_pipeline: FacesPipeline,
@@ -73,9 +79,16 @@ impl Inner {
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let swapchain_format = swapchain_capabilities.formats[0];
 
+        let chunks_pipeline = ChunksPipeline::new(&device);
         let blocks_pipeline = BlocksPipeline::new(&device);
         let faces_pipeline = FacesPipeline::new(&device, swapchain_format);
 
+        let blocks_indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("blocks_indirect_buffer"),
+            size: mem::size_of::<wgpu::util::DispatchIndirectArgs>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        });
         let draw_indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("draw_indirect_buffer"),
             size: mem::size_of::<wgpu::util::DrawIndirectArgs>() as u64,
@@ -117,6 +130,8 @@ impl Inner {
             surface,
             config,
             depth_texture,
+            blocks_indirect_buffer,
+            chunks_pipeline,
             draw_indirect_buffer,
             blocks_pipeline,
             faces_pipeline,
@@ -126,10 +141,19 @@ impl Inner {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct App {
-    blocks: Vec<u32>,
+    region: Region,
     inner: Option<Inner>,
+}
+
+impl App {
+    pub fn new(region: Region) -> Self {
+        Self {
+            region,
+            inner: None,
+        }
+    }
 }
 
 impl Deref for App {
@@ -238,10 +262,20 @@ impl ApplicationHandler for App {
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+                let (chunk_buffer, chunks_len_buffer) = self.chunks_pipeline.encode(
+                    &self.device,
+                    &mut encoder,
+                    &self.region,
+                    self.camera
+                        .clip_from_world_with_margin(&self.config, 8.0 * 2.0f32.sqrt()),
+                    &self.blocks_indirect_buffer,
+                );
                 let face_buffer = self.blocks_pipeline.encode(
                     &self.device,
                     &mut encoder,
-                    &self.blocks,
+                    &self.region,
+                    chunk_buffer,
+                    chunks_len_buffer,
                     self.camera.eye,
                     self.camera
                         .clip_from_world_with_margin(&self.config, 0.5 * 2.0f32.sqrt()),
@@ -279,9 +313,6 @@ fn main() {
     EventLoop::with_user_event()
         .build()
         .unwrap()
-        .run_app(&mut App {
-            blocks: region.blocks,
-            inner: None,
-        })
+        .run_app(&mut App::new(region))
         .unwrap();
 }

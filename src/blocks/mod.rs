@@ -2,48 +2,52 @@ use std::{borrow::Cow, mem};
 
 use wgpu::util::DeviceExt;
 
+use crate::region::Region;
+
 #[derive(Debug)]
 pub struct BlocksPipeline {
-    blocks_bind_group_layout: wgpu::BindGroupLayout,
-    blocks_pipeline: wgpu::ComputePipeline,
-    double_bind_group_layout: wgpu::BindGroupLayout,
-    double_pipeline: wgpu::ComputePipeline,
+    gen_faces_bind_group_layout: wgpu::BindGroupLayout,
+    gen_faces_pipeline: wgpu::ComputePipeline,
+    write_vertex_count_bind_group_layout: wgpu::BindGroupLayout,
+    write_vertex_count_pipeline: wgpu::ComputePipeline,
 }
 
 impl BlocksPipeline {
     pub fn new(device: &wgpu::Device) -> Self {
         let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("blocks_shader_module"),
+            label: Some("gen_faces_shader_module"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blocks.wgsl"))),
         });
 
-        let blocks_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("blocks_pipeline"),
+        let gen_faces_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("gen_faces_pipeline"),
             layout: None,
             module: &shader_module,
-            entry_point: "generateFaces",
+            entry_point: "genFaces",
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         });
 
-        let blocks_bind_group_layout = blocks_pipeline.get_bind_group_layout(0);
+        let gen_faces_bind_group_layout = gen_faces_pipeline.get_bind_group_layout(0);
 
-        let double_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("double_pipeline"),
-            layout: None,
-            module: &shader_module,
-            entry_point: "doubleFacesLen",
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
+        let write_vertex_count_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("write_vertex_count_pipeline"),
+                layout: None,
+                module: &shader_module,
+                entry_point: "writeVertexCount",
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            });
 
-        let double_bind_group_layout = double_pipeline.get_bind_group_layout(0);
+        let write_vertex_count_bind_group_layout =
+            write_vertex_count_pipeline.get_bind_group_layout(0);
 
         Self {
-            blocks_bind_group_layout,
-            blocks_pipeline,
-            double_pipeline,
-            double_bind_group_layout,
+            gen_faces_bind_group_layout,
+            gen_faces_pipeline,
+            write_vertex_count_pipeline,
+            write_vertex_count_bind_group_layout,
         }
     }
 
@@ -51,24 +55,26 @@ impl BlocksPipeline {
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        blocks: &[u32],
+        region: &Region,
+        chunk_buffer: wgpu::Buffer,
+        chunks_len_buffer: wgpu::Buffer,
         eye: glam::Vec3,
         clip_from_world_with_margin: glam::Mat4,
         draw_indirect_buffer: &wgpu::Buffer,
     ) -> wgpu::Buffer {
         let block_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("block_buffer"),
-            contents: bytemuck::cast_slice(blocks),
+            contents: bytemuck::cast_slice(region.blocks()),
             usage: wgpu::BufferUsages::STORAGE,
         });
         let blocks_len_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("blocks_len_buffer"),
-            contents: bytemuck::bytes_of(&(blocks.len() as u32)),
+            label: Some("blocks_buffer"),
+            contents: bytemuck::bytes_of(&(region.blocks().len() as u32)),
             usage: wgpu::BufferUsages::STORAGE,
         });
         let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("face_buffer"),
-            size: (blocks.len() * 3 * mem::size_of::<u32>()) as u64,
+            size: (region.blocks().len() * 3 * mem::size_of::<[u32; 2]>()) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -90,9 +96,9 @@ impl BlocksPipeline {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
-        let blocks_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("blocks_bind_group"),
-            layout: &self.blocks_bind_group_layout,
+        let gen_faces_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gen_faces_bind_group"),
+            layout: &self.gen_faces_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -104,32 +110,40 @@ impl BlocksPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: face_buffer.as_entire_binding(),
+                    resource: chunk_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: cursor_buffer.as_entire_binding(),
+                    resource: chunks_len_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: eye_buffer.as_entire_binding(),
+                    resource: face_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: clip_from_world_with_margin_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let double_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("double_bind_group"),
-            layout: &self.double_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 3,
                     resource: cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
+                    resource: eye_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: clip_from_world_with_margin_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        let write_vertex_count_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("write_vertex_count_bind_group"),
+            layout: &self.write_vertex_count_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: cursor_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
                     resource: draw_indirect_buffer.as_entire_binding(),
                 },
             ],
@@ -137,24 +151,24 @@ impl BlocksPipeline {
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("blocks_pass"),
+                label: Some("gen_faces_pass"),
                 timestamp_writes: None,
             });
 
-            pass.set_pipeline(&self.blocks_pipeline);
-            pass.set_bind_group(0, &blocks_bind_group, &[]);
+            pass.set_pipeline(&self.gen_faces_pipeline);
+            pass.set_bind_group(0, &gen_faces_bind_group, &[]);
 
-            pass.dispatch_workgroups(blocks.len().div_ceil(256) as u32, 1, 1);
+            pass.dispatch_workgroups(region.blocks().len().div_ceil(256) as u32, 1, 1);
         }
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("double_pass"),
+                label: Some("write_vertex_count_pass"),
                 timestamp_writes: None,
             });
 
-            pass.set_pipeline(&self.double_pipeline);
-            pass.set_bind_group(0, &double_bind_group, &[]);
+            pass.set_pipeline(&self.write_vertex_count_pipeline);
+            pass.set_bind_group(0, &write_vertex_count_bind_group, &[]);
 
             pass.dispatch_workgroups(1, 1, 1);
         }

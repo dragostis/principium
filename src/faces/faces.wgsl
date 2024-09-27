@@ -1,21 +1,21 @@
 @group(0)
 @binding(0)
-var<storage> faces: array<u32>;
+var<storage> faces: array<vec2<u32>>;
 @group(0)
 @binding(1)
 var<uniform> clip_from_world: mat4x4<f32>;
 
-fn vertexPos(face: u32, local_vertex_index: u32) -> array<vec3<f32>, 2> {
+fn vertexPos(face: vec2<u32>, local_vertex_index: u32) -> array<vec3<f32>, 2> {
     let block_pos = vec3(
-        f32(extractBits(face, 0u, 4u)),
-        f32(extractBits(face, 4u, 4u)),
-        f32(extractBits(face, 8u, 4u)),
+        f32(extractBits(face.x, 0u, 9u)),
+        f32(extractBits(face.x, 9u, 9u)),
+        f32(extractBits(face.x, 18u, 9u)),
     );
 
     var local_pos = array(0.0, 0.0, 0.0);
 
-    let axis = extractBits(face, 13u, 2u);
-    let sign = extractBits(face, 12u, 1u);
+    let axis = extractBits(face.y, 1u, 2u);
+    let sign = extractBits(face.y, 0u, 1u);
 
     local_pos[axis] = f32(sign);
     local_pos[(axis + 1) % 3] = f32(extractBits(local_vertex_index, 0u, 1u));

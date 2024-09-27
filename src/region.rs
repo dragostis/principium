@@ -4,8 +4,8 @@ use fastanvil::{complete::Chunk, Chunk as _, HeightMode};
 
 #[derive(Debug)]
 pub struct Region {
-    pub blocks: Vec<u32>,
     chunks: Vec<[u32; 2]>,
+    blocks: Vec<u32>,
 }
 
 impl Region {
@@ -39,8 +39,6 @@ impl Region {
                         let start = blocks.len() as u32;
                         let pos = u32::from_le_bytes([cx as u8, cy as u8, cz as u8, 0]);
 
-                        chunks.push([start, pos]);
-
                         for x in 0..16 {
                             for y in cy * 16..(cy + 1) * 16 {
                                 for z in 0..16 {
@@ -56,11 +54,22 @@ impl Region {
                                 }
                             }
                         }
+
+                        let end = blocks.len() as u32;
+                        chunks.push([end - start, pos]);
                     }
                 }
             }
         }
 
         Some(Self { blocks, chunks })
+    }
+
+    pub fn chunks(&self) -> &[[u32; 2]] {
+        &self.chunks
+    }
+
+    pub fn blocks(&self) -> &[u32] {
+        &self.blocks
     }
 }
