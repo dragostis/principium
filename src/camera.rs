@@ -19,7 +19,7 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let eye = glam::Vec3::new(0.0, 2.0, 10.0);
+        let eye = glam::Vec3::new(0.0, 2.0, 20.0);
 
         Self {
             eye,

@@ -61,6 +61,11 @@ impl BlocksPipeline {
             contents: bytemuck::cast_slice(blocks),
             usage: wgpu::BufferUsages::STORAGE,
         });
+        let blocks_len_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("blocks_len_buffer"),
+            contents: bytemuck::bytes_of(&(blocks.len() as u32)),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
         let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("face_buffer"),
             size: (blocks.len() * 3 * mem::size_of::<u32>()) as u64,
@@ -75,7 +80,7 @@ impl BlocksPipeline {
         });
         let eye_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("eye_buffer"),
-            contents: bytemuck::bytes_of(glam::Vec3A::from(eye).as_ref()),
+            contents: bytemuck::cast_slice(eye.extend(0.0).as_ref()),
             usage: wgpu::BufferUsages::STORAGE,
         });
         let clip_from_world_with_margin_buffer =
@@ -95,18 +100,22 @@ impl BlocksPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: face_buffer.as_entire_binding(),
+                    resource: blocks_len_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: cursor_buffer.as_entire_binding(),
+                    resource: face_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: eye_buffer.as_entire_binding(),
+                    resource: cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
+                    resource: eye_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
                     resource: clip_from_world_with_margin_buffer.as_entire_binding(),
                 },
             ],
@@ -116,11 +125,11 @@ impl BlocksPipeline {
             layout: &self.double_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 3,
                     resource: cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 6,
                     resource: draw_indirect_buffer.as_entire_binding(),
                 },
             ],

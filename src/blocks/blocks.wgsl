@@ -3,15 +3,18 @@
 var<storage> blocks: array<u32>;
 @group(0)
 @binding(1)
-var<storage, read_write> faces: array<u32>;
+var<storage> blocks_len: u32;
 @group(0)
 @binding(2)
-var<storage, read_write> cursor: atomic<u32>;
+var<storage, read_write> faces: array<u32>;
 @group(0)
 @binding(3)
-var<storage> eye: vec3<f32>;
+var<storage, read_write> cursor: atomic<u32>;
 @group(0)
 @binding(4)
+var<storage> eye: vec3<f32>;
+@group(0)
+@binding(5)
 var<storage> clip_from_world_with_margin: mat4x4<f32>;
 
 fn blockPos(block: u32) -> vec3<u32> {
@@ -51,7 +54,7 @@ fn generateFaces(
 
     workgroupBarrier();
 
-    if global_id.x < arrayLength(&blocks) {
+    if global_id.x < blocks_len {
         let block = blocks[global_id.x];
         let pos = blockPos(block);
         let mid = vec3<f32>(pos) + vec3(0.5);
@@ -105,7 +108,7 @@ struct DrawIndirect {
 }
 
 @group(0)
-@binding(3)
+@binding(6)
 var<storage, read_write> draw_indirect: DrawIndirect;
 
 @compute
