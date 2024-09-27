@@ -1,7 +1,7 @@
 use std::{
     env,
     fs::File,
-    isize, mem,
+    mem,
     ops::{Deref, DerefMut},
     sync::Arc,
     time::Instant,
