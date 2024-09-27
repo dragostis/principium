@@ -20,8 +20,8 @@ var<storage> clip_from_world_with_margin: mat4x4<f32>;
 fn blockPos(block: u32) -> vec3<u32> {
     return vec3(
         extractBits(block, 0u, 4u),
-        extractBits(block, 4u, 9u),
-        extractBits(block, 13u, 4u),
+        extractBits(block, 4u, 4u),
+        extractBits(block, 8u, 4u),
     );
 }
 
@@ -29,9 +29,9 @@ fn newFace(pos: vec3<u32>, i: u32) -> u32 {
     var face = 0u;
 
     face = insertBits(face, pos.x, 0u, 4u);
-    face = insertBits(face, pos.y, 4u, 9u);
-    face = insertBits(face, pos.z, 13u, 4u);
-    face = insertBits(face, i, 17u, 3u);
+    face = insertBits(face, pos.y, 4u, 4u);
+    face = insertBits(face, pos.z, 8u, 4u);
+    face = insertBits(face, i, 12u, 3u);
 
     return face;
 }

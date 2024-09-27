@@ -7,7 +7,6 @@ use std::{
     time::Instant,
 };
 
-use fastanvil::{complete::Chunk, Chunk as _, HeightMode, Region};
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
@@ -19,8 +18,9 @@ use winit::{
 mod blocks;
 mod camera;
 mod faces;
+mod region;
 
-use crate::{blocks::BlocksPipeline, camera::Camera, faces::FacesPipeline};
+use crate::{blocks::BlocksPipeline, camera::Camera, faces::FacesPipeline, region::Region};
 
 #[derive(Debug)]
 struct Inner {
@@ -274,38 +274,13 @@ fn main() {
 
     let file = File::open(path).unwrap();
 
-    let mut region = Region::from_stream(file).unwrap();
-    let data = region.read_chunk(2, 0).unwrap().unwrap();
-
-    let chunk = Chunk::from_bytes(&data).unwrap();
-
-    let mut max = isize::MIN;
-    for x in 0..16 {
-        for z in 0..16 {
-            let h = chunk.surface_height(x, z, HeightMode::Trust);
-
-            max = max.max(h);
-        }
-    }
-
-    let mut blocks = Vec::new();
-    for x in 0..16 {
-        for y in -64..=max {
-            for z in 0..16 {
-                if let Some(block) = chunk.block(x, y, z) {
-                    if block.name() != "minecraft:air" {
-                        blocks.push((z << 13) as u32 | ((y + 64) << 4) as u32 | x as u32);
-                    }
-                }
-            }
-        }
-    }
+    let region = Region::new(file).unwrap();
 
     EventLoop::with_user_event()
         .build()
         .unwrap()
         .run_app(&mut App {
-            blocks,
+            blocks: region.blocks,
             inner: None,
         })
         .unwrap();
