@@ -67,11 +67,6 @@ impl BlocksPipeline {
             contents: bytemuck::cast_slice(region.blocks()),
             usage: wgpu::BufferUsages::STORAGE,
         });
-        let blocks_len_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("blocks_buffer"),
-            contents: bytemuck::bytes_of(&(region.blocks().len() as u32)),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
         let chunk_cursor_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("chunk_cursor_buffer"),
             size: mem::size_of::<u32>() as u64,

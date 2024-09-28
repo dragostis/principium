@@ -34,7 +34,6 @@ struct Inner {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     depth_texture: wgpu::Texture,
-    blocks_indirect_buffer: wgpu::Buffer,
     chunks_pipeline: ChunksPipeline,
     draw_indirect_buffer: wgpu::Buffer,
     blocks_pipeline: BlocksPipeline,
@@ -83,12 +82,6 @@ impl Inner {
         let blocks_pipeline = BlocksPipeline::new(&device);
         let faces_pipeline = FacesPipeline::new(&device, swapchain_format);
 
-        let blocks_indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("blocks_indirect_buffer"),
-            size: mem::size_of::<wgpu::util::DispatchIndirectArgs>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
-            mapped_at_creation: false,
-        });
         let draw_indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("draw_indirect_buffer"),
             size: mem::size_of::<wgpu::util::DrawIndirectArgs>() as u64,
@@ -130,7 +123,6 @@ impl Inner {
             surface,
             config,
             depth_texture,
-            blocks_indirect_buffer,
             chunks_pipeline,
             draw_indirect_buffer,
             blocks_pipeline,
@@ -268,7 +260,6 @@ impl ApplicationHandler for App {
                     &self.region,
                     self.camera
                         .clip_from_world_with_margin(&self.config, 8.0 * 2.0f32.sqrt()),
-                    &self.blocks_indirect_buffer,
                 );
                 let face_buffer = self.blocks_pipeline.encode(
                     &self.device,
