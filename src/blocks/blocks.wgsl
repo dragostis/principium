@@ -48,6 +48,8 @@ const FACES_LEN = WORKGROUP_SIZE * 3;
 var<workgroup> workgroup_face_cursor: atomic<u32>;
 var<workgroup> workgroup_faces: array<vec2<u32>, FACES_LEN>;
 
+var<workgroup> broadcast: u32;
+
 fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
     if local_index == 0 {
         atomicStore(&workgroup_face_cursor, 0u);
@@ -89,13 +91,15 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
 
     let len = atomicLoad(&workgroup_face_cursor);
 
+    storageBarrier();
+
     if local_index == 0 {
-        atomicStore(&workgroup_face_cursor, atomicAdd(&face_cursor, len));
+        broadcast = atomicAdd(&face_cursor, len);
     }
 
     workgroupBarrier();
 
-    let face_start = atomicLoad(&workgroup_face_cursor);
+    let face_start = broadcast;
 
     for (var stride = 0u; stride < FACES_LEN; stride += WORKGROUP_SIZE) {
         let index = local_index + stride;
@@ -110,13 +114,15 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
 @workgroup_size(WORKGROUP_SIZE)
 fn genFaces(@builtin(local_invocation_index) local_index: u32) {
     loop {
+        storageBarrier();
+
         if local_index == 0 {
-            atomicStore(&workgroup_face_cursor, atomicAdd(&chunk_cursor, 1u));
+            broadcast = atomicAdd(&chunk_cursor, 1u);
         }
 
         workgroupBarrier();
 
-        let chunk_index = atomicLoad(&workgroup_face_cursor);
+        let chunk_index= broadcast;
 
         if chunk_index >= chunks_len {
             break;
