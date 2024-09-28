@@ -18,8 +18,8 @@ fn cullChunks(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     let chunk = chunks[global_id.x];
-
-    let chunk_mid = fma(vec3<f32>(unpack4xU8(chunk.y).xyz), vec3(16.0), vec3(8.0));
+    let unpacked = unpack4xU8(chunk.y);
+    let chunk_mid = fma(vec3<f32>(unpacked.xyz), vec3(16.0), vec3(8.0));
 
     let clip_mid_h = clip_from_world_with_margin * vec4(chunk_mid, 1.0);
     let clip_mid = clip_mid_h.xyz / clip_mid_h.w;

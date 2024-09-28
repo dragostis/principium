@@ -82,7 +82,8 @@ fn genFaces(
             let chunk = chunks[chunk_i];
 
             let block = blocks[global_id.x];
-            let pos = blockPos(block) + unpack4xU8(chunk.y).xyz * vec3(16);
+            let unpacked = unpack4xU8(chunk.y);
+            let pos = blockPos(block) + unpacked.xyz * vec3(16);
             let mid = vec3<f32>(pos) + vec3(0.5);
 
             let clip_mid_h = clip_from_world_with_margin * vec4(mid, 1.0);

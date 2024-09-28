@@ -8,6 +8,7 @@ use winit::{
 const FOV_Y: f32 = f32::consts::FRAC_PI_4;
 const NEAR: f32 = 1.0;
 const FAR: f32 = 1000.0;
+const RADIANS_PER_DOT: f32 = 1.0 / 180.0;
 
 #[derive(Debug)]
 pub struct Camera {
@@ -19,13 +20,16 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let eye = glam::Vec3::new(0.0, 2.0, 20.0);
+        let eye = glam::Vec3::new(0.0, 150.0, 0.0);
 
         Self {
             eye,
-            dir: glam::Vec3::NEG_Z,
+            dir: glam::Vec3::ZERO,
             vel: glam::Vec3::ZERO,
-            cursor_pos_delta: glam::Vec2::ZERO,
+            cursor_pos_delta: glam::Vec2::new(
+                (f32::consts::FRAC_PI_2 + f32::consts::FRAC_PI_4) * RADIANS_PER_DOT.recip(),
+                0.0,
+            ),
         }
     }
 }
@@ -87,8 +91,6 @@ impl Camera {
         let vel = forward * self.vel.x + glam::Vec3::Y * self.vel.y + left * self.vel.z;
 
         self.eye += vel * 10.0 * dt.as_secs_f32();
-
-        const RADIANS_PER_DOT: f32 = 1.0 / 180.0;
 
         let pitch = (-self.cursor_pos_delta.y * RADIANS_PER_DOT)
             .clamp(-f32::consts::PI / 2.0, f32::consts::PI / 2.0);
