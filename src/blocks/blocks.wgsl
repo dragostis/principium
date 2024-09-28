@@ -2,9 +2,6 @@
 @binding(0)
 var<storage> blocks: array<u32>;
 @group(0)
-@binding(1)
-var<storage> blocks_len: u32;
-@group(0)
 @binding(2)
 var<storage> chunks: array<vec2<u32>>;
 @group(0)
@@ -12,15 +9,18 @@ var<storage> chunks: array<vec2<u32>>;
 var<storage> chunks_len: u32;
 @group(0)
 @binding(4)
-var<storage, read_write> faces: array<vec2<u32>>;
+var<storage, read_write> chunk_cursor: atomic<u32>;
 @group(0)
 @binding(5)
-var<storage, read_write> cursor: atomic<u32>;
+var<storage, read_write> faces: array<vec2<u32>>;
 @group(0)
 @binding(6)
-var<storage> eye: vec3<f32>;
+var<storage, read_write> face_cursor: atomic<u32>;
 @group(0)
 @binding(7)
+var<storage> eye: vec3<f32>;
+@group(0)
+@binding(8)
 var<storage> clip_from_world_with_margin: mat4x4<f32>;
 
 fn blockPos(block: u32) -> vec3<u32> {
@@ -60,49 +60,41 @@ fn findChunk(block_i: u32) -> u32 {
 const WORKGROUP_SIZE = 256u;
 const FACES_LEN = WORKGROUP_SIZE * 3;
 
-var<workgroup> workgroup_cursor: atomic<u32>;
+var<workgroup> workgroup_face_cursor: atomic<u32>;
 var<workgroup> workgroup_faces: array<vec2<u32>, FACES_LEN>;
 
-@compute
-@workgroup_size(WORKGROUP_SIZE)
-fn genFaces(
-    @builtin(local_invocation_index) local_index: u32,
-    @builtin(global_invocation_id) global_id: vec3<u32>,
-) {
+fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
     if local_index == 0 {
-        atomicStore(&workgroup_cursor, 0u);
+        atomicStore(&workgroup_face_cursor, 0u);
     }
 
     workgroupBarrier();
 
-    if global_id.x < blocks_len {
-        let chunk_i = findChunk(global_id.x);
+    if block_index < chunk.x {
+        let block = blocks[block_index];
+        let unpacked = unpack4xU8(chunk.y);
+        let pos = blockPos(block) + unpacked.xyz * vec3(16);
+        let mid = vec3<f32>(pos) + vec3(0.5);
 
-        if chunk_i < chunks_len {
-            let chunk = chunks[chunk_i];
+        let clip_mid_h = clip_from_world_with_margin * vec4(mid, 1.0);
+        let clip_mid = clip_mid_h.xyz / clip_mid_h.w;
 
-            let block = blocks[global_id.x];
-            let unpacked = unpack4xU8(chunk.y);
-            let pos = blockPos(block) + unpacked.xyz * vec3(16);
-            let mid = vec3<f32>(pos) + vec3(0.5);
+        let max_dist = max(
+            abs(clip_mid.x),
+            max(abs(clip_mid.y), abs(clip_mid.z)),
+        );
 
-            let clip_mid_h = clip_from_world_with_margin * vec4(mid, 1.0);
-            let clip_mid = clip_mid_h.xyz / clip_mid_h.w;
+        if max_dist <= 1.0 {
+            for (var i = 0u; i < 6; i++) {
+                var axis_array = array(0.0, 0.0, 0.0);
+                axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
 
-            let max_dist = max(abs(clip_mid.x), max(abs(clip_mid.y), abs(clip_mid.z)));
+                let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
+                let origin = fma(axis, vec3(0.5), mid);
 
-            if max_dist <= 1.0 {
-                for (var i = 0u; i < 6; i++) {
-                    var axis_array = array(0.0, 0.0, 0.0);
-                    axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
-
-                    let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
-                    let origin = fma(axis, vec3(0.5), mid);
-
-                    if dot(normalize(eye - origin), axis) > 0.0 {
-                        let fi = atomicAdd(&workgroup_cursor, 1u);
-                        workgroup_faces[fi] = newFace(pos, i);
-                    }
+                if dot(normalize(eye - origin), axis) > 0.0 {
+                    let fi = atomicAdd(&workgroup_face_cursor, 1u);
+                    workgroup_faces[fi] = newFace(pos, i);
                 }
             }
         }
@@ -110,20 +102,45 @@ fn genFaces(
 
     workgroupBarrier();
 
-    let len = atomicLoad(&workgroup_cursor);
+    let len = atomicLoad(&workgroup_face_cursor);
 
     if local_index == 0 {
-        let i = atomicAdd(&cursor, len);
-        atomicStore(&workgroup_cursor, i);
+        let i = atomicAdd(&face_cursor, len);
+        atomicStore(&workgroup_face_cursor, i);
     }
 
     workgroupBarrier();
 
-    for (var wg = 0u; wg < FACES_LEN; wg += WORKGROUP_SIZE) {
-        let i = local_index + wg;
-        if i < len {
-            let fi = atomicLoad(&workgroup_cursor) + i;
-            faces[fi] = workgroup_faces[i];
+    for (var stride = 0u; stride < FACES_LEN; stride += WORKGROUP_SIZE) {
+        let index = local_index + stride;
+        if index < len {
+            let face_index = atomicLoad(&workgroup_face_cursor) + index;
+            faces[face_index] = workgroup_faces[index];
+        }
+    }
+}
+
+@compute
+@workgroup_size(WORKGROUP_SIZE)
+fn genFaces(@builtin(local_invocation_index) local_index: u32) {
+    loop {
+        let chunk_index = atomicAdd(&chunk_cursor, 1u);
+
+        if chunk_index >= chunks_len {
+            break;
+        }
+
+        let chunk = chunks[chunk_index];
+        let chunk_start = select(
+            chunks[chunk_index - 1].x,
+            0u,
+            chunk_index == 0,
+        );
+        let chunk_len = chunk.x - chunk_start;
+
+        for (var stride = 0u; stride < chunk_len; stride += WORKGROUP_SIZE) {
+            let block_index = local_index + stride + chunk_start;
+            genChunkFaces(chunk, block_index, local_index);
         }
     }
 }
@@ -136,12 +153,12 @@ struct DrawIndirect {
 }
 
 @group(0)
-@binding(8)
+@binding(9)
 var<storage, read_write> draw_indirect: DrawIndirect;
 
 @compute
 @workgroup_size(1)
 fn writeVertexCount() {
-    draw_indirect.vertex_count = atomicLoad(&cursor) * 6;
+    draw_indirect.vertex_count = atomicLoad(&face_cursor) * 6;
     draw_indirect.instance_count = 1u;
 }

@@ -78,8 +78,8 @@ fn prefixSum(
 
     workgroupBarrier();
 
-    for (var i = 0u; i < div_ceil(chunks_len, WORKGROUP_SIZE); i++) {
-        let index = i * WORKGROUP_SIZE + local_index;
+    for (var stride = 0u; stride < chunks_len; stride += WORKGROUP_SIZE) {
+        let index = local_index + stride;
 
         var val: u32;
         if index < chunks_len {

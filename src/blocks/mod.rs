@@ -72,14 +72,20 @@ impl BlocksPipeline {
             contents: bytemuck::bytes_of(&(region.blocks().len() as u32)),
             usage: wgpu::BufferUsages::STORAGE,
         });
+        let chunk_cursor_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("chunk_cursor_buffer"),
+            size: mem::size_of::<u32>() as u64,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
         let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("face_buffer"),
             size: (region.blocks().len() * 3 * mem::size_of::<[u32; 2]>()) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        let cursor_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("cursor_buffer"),
+        let face_cursor_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("face_cursor_buffer"),
             size: mem::size_of::<u32>() as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
@@ -105,10 +111,6 @@ impl BlocksPipeline {
                     resource: block_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: blocks_len_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
                     binding: 2,
                     resource: chunk_buffer.as_entire_binding(),
                 },
@@ -118,18 +120,22 @@ impl BlocksPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: face_buffer.as_entire_binding(),
+                    resource: chunk_cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: cursor_buffer.as_entire_binding(),
+                    resource: face_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
-                    resource: eye_buffer.as_entire_binding(),
+                    resource: face_cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
+                    resource: eye_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
                     resource: clip_from_world_with_margin_buffer.as_entire_binding(),
                 },
             ],
@@ -139,11 +145,11 @@ impl BlocksPipeline {
             layout: &self.write_vertex_count_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: cursor_buffer.as_entire_binding(),
+                    binding: 6,
+                    resource: face_cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 8,
+                    binding: 9,
                     resource: draw_indirect_buffer.as_entire_binding(),
                 },
             ],
@@ -158,7 +164,7 @@ impl BlocksPipeline {
             pass.set_pipeline(&self.gen_faces_pipeline);
             pass.set_bind_group(0, &gen_faces_bind_group, &[]);
 
-            pass.dispatch_workgroups(region.blocks().len().div_ceil(256) as u32, 1, 1);
+            pass.dispatch_workgroups(1, 1, 1);
         }
 
         {
