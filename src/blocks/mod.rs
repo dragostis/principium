@@ -111,31 +111,31 @@ impl BlocksPipeline {
                     resource: block_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 1,
                     resource: chunk_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 2,
                     resource: chunks_len_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 4,
+                    binding: 3,
                     resource: chunk_cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 5,
+                    binding: 4,
                     resource: face_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 6,
+                    binding: 5,
                     resource: face_cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 7,
+                    binding: 6,
                     resource: eye_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 8,
+                    binding: 7,
                     resource: clip_from_world_with_margin_buffer.as_entire_binding(),
                 },
             ],
@@ -145,11 +145,11 @@ impl BlocksPipeline {
             layout: &self.write_vertex_count_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
-                    binding: 6,
+                    binding: 5,
                     resource: face_cursor_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 9,
+                    binding: 8,
                     resource: draw_indirect_buffer.as_entire_binding(),
                 },
             ],
@@ -164,7 +164,7 @@ impl BlocksPipeline {
             pass.set_pipeline(&self.gen_faces_pipeline);
             pass.set_bind_group(0, &gen_faces_bind_group, &[]);
 
-            pass.dispatch_workgroups(1, 1, 1);
+            pass.dispatch_workgroups(256, 1, 1);
         }
 
         {

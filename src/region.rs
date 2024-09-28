@@ -22,8 +22,8 @@ impl Region {
 
         let mut block_set = HashSet::new();
 
-        for cx in 0..1 {
-            for cz in 0..1 {
+        for cx in 0..32 {
+            for cz in 0..32 {
                 if let Some(chunk) = region
                     .read_chunk(cx, cz)
                     .ok()?

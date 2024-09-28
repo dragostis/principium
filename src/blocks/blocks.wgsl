@@ -2,25 +2,25 @@
 @binding(0)
 var<storage> blocks: array<u32>;
 @group(0)
-@binding(2)
+@binding(1)
 var<storage> chunks: array<vec2<u32>>;
 @group(0)
-@binding(3)
+@binding(2)
 var<storage> chunks_len: u32;
 @group(0)
-@binding(4)
+@binding(3)
 var<storage, read_write> chunk_cursor: atomic<u32>;
 @group(0)
-@binding(5)
+@binding(4)
 var<storage, read_write> faces: array<vec2<u32>>;
 @group(0)
-@binding(6)
+@binding(5)
 var<storage, read_write> face_cursor: atomic<u32>;
 @group(0)
-@binding(7)
+@binding(6)
 var<storage> eye: vec3<f32>;
 @group(0)
-@binding(8)
+@binding(7)
 var<storage> clip_from_world_with_margin: mat4x4<f32>;
 
 fn blockPos(block: u32) -> vec3<u32> {
@@ -40,21 +40,6 @@ fn newFace(pos: vec3<u32>, i: u32) -> vec2<u32> {
     face.y = i;
 
     return face;
-}
-
-fn findChunk(block_i: u32) -> u32 {
-    var lo: u32 = 0u;
-    var hi: u32 = chunks_len;
-
-    for (var i = chunks_len; i > 0u; i >>= 1u) {
-        let mid: u32 = lo + ((hi - lo) >> 1u);
-        let is_greater = chunks[mid].x > block_i;
-
-        lo = select(mid + 1u, lo, is_greater);
-        hi = select(hi, mid, is_greater);
-    }
-
-    return lo;
 }
 
 const WORKGROUP_SIZE = 256u;
@@ -93,8 +78,8 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
                 let origin = fma(axis, vec3(0.5), mid);
 
                 if dot(normalize(eye - origin), axis) > 0.0 {
-                    let fi = atomicAdd(&workgroup_face_cursor, 1u);
-                    workgroup_faces[fi] = newFace(pos, i);
+                    let face_index = atomicAdd(&workgroup_face_cursor, 1u);
+                    workgroup_faces[face_index] = newFace(pos, i);
                 }
             }
         }
@@ -105,16 +90,17 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
     let len = atomicLoad(&workgroup_face_cursor);
 
     if local_index == 0 {
-        let i = atomicAdd(&face_cursor, len);
-        atomicStore(&workgroup_face_cursor, i);
+        atomicStore(&workgroup_face_cursor, atomicAdd(&face_cursor, len));
     }
 
     workgroupBarrier();
 
+    let face_start = atomicLoad(&workgroup_face_cursor);
+
     for (var stride = 0u; stride < FACES_LEN; stride += WORKGROUP_SIZE) {
         let index = local_index + stride;
         if index < len {
-            let face_index = atomicLoad(&workgroup_face_cursor) + index;
+            let face_index = index + face_start;
             faces[face_index] = workgroup_faces[index];
         }
     }
@@ -124,7 +110,13 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
 @workgroup_size(WORKGROUP_SIZE)
 fn genFaces(@builtin(local_invocation_index) local_index: u32) {
     loop {
-        let chunk_index = atomicAdd(&chunk_cursor, 1u);
+        if local_index == 0 {
+            atomicStore(&workgroup_face_cursor, atomicAdd(&chunk_cursor, 1u));
+        }
+
+        workgroupBarrier();
+
+        let chunk_index = atomicLoad(&workgroup_face_cursor);
 
         if chunk_index >= chunks_len {
             break;
@@ -153,7 +145,7 @@ struct DrawIndirect {
 }
 
 @group(0)
-@binding(9)
+@binding(8)
 var<storage, read_write> draw_indirect: DrawIndirect;
 
 @compute
