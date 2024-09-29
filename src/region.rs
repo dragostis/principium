@@ -91,19 +91,26 @@ impl Region {
                 let key_y = (y + cy as u32 * 16) as i16;
                 let key_z = (z + cz as u32 * 16) as i16;
 
-                let is_in_set = |key_x: i16, key_y: i16, key_z: i16| {
-                    block_set.contains(&[key_x, key_y, key_z]) as u8
-                };
+                let is_in_set =
+                    |key_x: i16, key_y: i16, key_z: i16| block_set.contains(&[key_x, key_y, key_z]);
 
-                let count = is_in_set(key_x + 1, key_y, key_z)
-                    + is_in_set(key_x - 1, key_y, key_z)
-                    + is_in_set(key_x, key_y + 1, key_z)
-                    + is_in_set(key_x, key_y - 1, key_z)
-                    + is_in_set(key_x, key_y, key_z + 1)
-                    + is_in_set(key_x, key_y, key_z - 1);
+                let neighbors = [
+                    is_in_set(key_x - 1, key_y, key_z),
+                    is_in_set(key_x + 1, key_y, key_z),
+                    is_in_set(key_x, key_y - 1, key_z),
+                    is_in_set(key_x, key_y + 1, key_z),
+                    is_in_set(key_x, key_y, key_z - 1),
+                    is_in_set(key_x, key_y, key_z + 1),
+                ];
+                let face_bit_set = neighbors
+                    .into_iter()
+                    .enumerate()
+                    .fold(0, |set, (i, has_neighbor)| {
+                        set | (((!has_neighbor) as u8) << i)
+                    });
 
-                if count < 6 {
-                    Some(block)
+                if face_bit_set.count_ones() > 0 {
+                    Some(((face_bit_set as u32) << 12) | block)
                 } else {
                     if let Some(len) = chunk_map.get_mut(&pos) {
                         *len -= 1;

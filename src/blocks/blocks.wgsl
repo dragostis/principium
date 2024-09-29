@@ -73,15 +73,18 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
 
         if max_dist <= 1.0 {
             for (var i = 0u; i < 6; i++) {
-                var axis_array = array(0.0, 0.0, 0.0);
-                axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
+                let has_face = bool(extractBits(block, i + 12, 1u));
+                if has_face {
+                    var axis_array = array(0.0, 0.0, 0.0);
+                    axis_array[i >> 1] = select(-1.0, 1.0, bool(i & 1));
 
-                let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
-                let origin = fma(axis, vec3(0.5), mid);
+                    let axis = vec3(axis_array[0], axis_array[1], axis_array[2]);
+                    let origin = fma(axis, vec3(0.5), mid);
 
-                if dot(normalize(eye - origin), axis) > 0.0 {
-                    let face_index = atomicAdd(&workgroup_face_cursor, 1u);
-                    workgroup_faces[face_index] = newFace(pos, i);
+                    if dot(normalize(eye - origin), axis) > 0.0 {
+                        let face_index = atomicAdd(&workgroup_face_cursor, 1u);
+                        workgroup_faces[face_index] = newFace(pos, i);
+                    }
                 }
             }
         }
