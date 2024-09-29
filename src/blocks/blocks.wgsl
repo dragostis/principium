@@ -120,7 +120,7 @@ fn genFaces(@builtin(local_invocation_index) local_index: u32) {
 
         workgroupBarrier();
 
-        let chunk_index= broadcast;
+        let chunk_index = broadcast;
 
         if chunk_index >= chunks_len {
             break;

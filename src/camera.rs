@@ -108,8 +108,10 @@ impl Camera {
             NEAR,
             FAR,
         );
+        let flip_z = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, 1.0))
+            * glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, -1.0));
 
-        proj * view
+        flip_z * proj * view
     }
 
     pub fn clip_from_world_with_margin(
@@ -128,7 +130,9 @@ impl Camera {
             NEAR + dist,
             FAR + dist + margin,
         );
+        let flip_z = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, 1.0))
+            * glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, -1.0));
 
-        proj * view
+        flip_z * proj * view
     }
 }
