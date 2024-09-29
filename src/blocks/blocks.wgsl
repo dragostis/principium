@@ -91,8 +91,6 @@ fn genChunkFaces(chunk: vec2<u32>, block_index: u32, local_index: u32) {
 
     let len = atomicLoad(&workgroup_face_cursor);
 
-    storageBarrier();
-
     if local_index == 0 {
         broadcast = atomicAdd(&face_cursor, len);
     }
