@@ -20,10 +20,11 @@ mod camera;
 mod chunks;
 mod faces;
 mod region;
+mod tiles;
 
 use crate::{
     blocks::BlocksPipeline, camera::Camera, chunks::ChunksPipeline, faces::FacesPipeline,
-    region::Region,
+    region::Region, tiles::TilesPipeline,
 };
 
 #[derive(Debug)]
@@ -38,6 +39,7 @@ struct Inner {
     draw_indirect_buffer: wgpu::Buffer,
     blocks_pipeline: BlocksPipeline,
     faces_pipeline: FacesPipeline,
+    tiles_pipeline: TilesPipeline,
     camera: Camera,
     last_inst: Option<Instant>,
 }
@@ -66,7 +68,7 @@ impl Inner {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: wgpu::Features::empty(),
+                    required_features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                     required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
@@ -81,6 +83,7 @@ impl Inner {
         let chunks_pipeline = ChunksPipeline::new(&device);
         let blocks_pipeline = BlocksPipeline::new(&device);
         let faces_pipeline = FacesPipeline::new(&device, swapchain_format);
+        let tiles_pipeline = TilesPipeline::new(&device);
 
         let draw_indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("draw_indirect_buffer"),
@@ -105,7 +108,7 @@ impl Inner {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth24Plus,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
 
@@ -127,6 +130,7 @@ impl Inner {
             draw_indirect_buffer,
             blocks_pipeline,
             faces_pipeline,
+            tiles_pipeline,
             camera,
             last_inst: None,
         }
@@ -222,7 +226,8 @@ impl ApplicationHandler for App {
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::Depth24Plus,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
                 });
 
@@ -283,6 +288,8 @@ impl ApplicationHandler for App {
                     &color_view,
                     &depth_view,
                 );
+                self.tiles_pipeline
+                    .encode(&self.device, &mut encoder, &depth_view, &self.config);
 
                 self.queue.submit(Some(encoder.finish()));
 

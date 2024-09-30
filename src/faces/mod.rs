@@ -1,6 +1,6 @@
 use std::{borrow::Cow, mem, num::NonZero};
 
-use wgpu::{util::DeviceExt, TextureView};
+use wgpu::util::DeviceExt;
 
 #[derive(Debug)]
 pub struct FacesPipeline {
@@ -90,8 +90,8 @@ impl FacesPipeline {
         face_buffer: &wgpu::Buffer,
         clip_from_world: glam::Mat4,
         draw_indirect_buffer: &wgpu::Buffer,
-        color_view: &TextureView,
-        depth_view: &TextureView,
+        color_view: &wgpu::TextureView,
+        depth_view: &wgpu::TextureView,
     ) {
         let clip_from_world_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("clip_from_world_buffer"),
