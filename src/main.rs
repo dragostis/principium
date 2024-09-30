@@ -254,12 +254,14 @@ impl ApplicationHandler for App {
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+                let aspect_ratio = self.config.width as f32 / self.config.height as f32;
+
                 let (chunk_buffer, chunks_len_buffer) = self.chunks_pipeline.encode(
                     &self.device,
                     &mut encoder,
                     &self.region,
                     self.camera
-                        .clip_from_world_with_margin(&self.config, 8.0 * 2.0f32.sqrt()),
+                        .clip_from_world_with_margin(aspect_ratio, 8.0 * 3.0f32.sqrt()),
                 );
                 let face_buffer = self.blocks_pipeline.encode(
                     &self.device,
@@ -269,14 +271,14 @@ impl ApplicationHandler for App {
                     chunks_len_buffer,
                     self.camera.eye,
                     self.camera
-                        .clip_from_world_with_margin(&self.config, 0.5 * 2.0f32.sqrt()),
+                        .clip_from_world_with_margin(aspect_ratio, 0.5 * 3.0f32.sqrt()),
                     &self.draw_indirect_buffer,
                 );
                 self.faces_pipeline.encode(
                     &self.device,
                     &mut encoder,
                     &face_buffer,
-                    self.camera.clip_from_world(&self.config),
+                    self.camera.clip_from_world(aspect_ratio),
                     &self.draw_indirect_buffer,
                     &color_view,
                     &depth_view,

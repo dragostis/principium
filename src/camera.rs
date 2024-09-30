@@ -100,39 +100,28 @@ impl Camera {
             .mul_vec3(glam::Vec3::NEG_Z);
     }
 
-    pub fn clip_from_world(&self, config: &wgpu::SurfaceConfiguration) -> glam::Mat4 {
+    pub fn clip_from_world(&self, aspect_ratio: f32) -> glam::Mat4 {
         let view = glam::Mat4::look_to_rh(self.eye, self.dir, glam::Vec3::Y);
-        let proj = glam::Mat4::perspective_rh(
-            FOV_Y,
-            config.width as f32 / config.height as f32,
-            NEAR,
-            FAR,
-        );
+        let proj = glam::Mat4::perspective_rh(FOV_Y, aspect_ratio, NEAR, FAR);
         let flip_z = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, 1.0))
             * glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, -1.0));
 
         flip_z * proj * view
     }
 
-    pub fn clip_from_world_with_margin(
-        &self,
-        config: &wgpu::SurfaceConfiguration,
-        margin: f32,
-    ) -> glam::Mat4 {
+    pub fn clip_from_world_with_margin(&self, aspect_ratio: f32, margin: f32) -> glam::Mat4 {
         let dist = margin / (FOV_Y / 2.0).sin();
 
         let eye = self.eye - self.dir * dist;
 
         let view = glam::Mat4::look_to_rh(eye, self.dir, glam::Vec3::Y);
-        let proj = glam::Mat4::perspective_rh(
+        let proj = glam::Mat4::perspective_rh_gl(
             FOV_Y,
-            config.width as f32 / config.height as f32,
-            NEAR + dist,
+            aspect_ratio,
+            NEAR + dist - margin,
             FAR + dist + margin,
         );
-        let flip_z = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, 1.0))
-            * glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, -1.0));
 
-        flip_z * proj * view
+        proj * view
     }
 }
