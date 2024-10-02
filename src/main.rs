@@ -68,7 +68,7 @@ impl Inner {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                    required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },

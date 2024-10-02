@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 pub struct TilesPipeline {
     activate_tiles_bind_group_layout: wgpu::BindGroupLayout,
     activate_tiles_pipeline: wgpu::ComputePipeline,
+    depth_compare_sampler: wgpu::Sampler,
 }
 
 impl TilesPipeline {
@@ -25,11 +26,20 @@ impl TilesPipeline {
                 cache: None,
             });
 
+        let depth_compare_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("depth_compare_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            compare: Some(wgpu::CompareFunction::Equal),
+            ..Default::default()
+        });
+
         let activate_tiles_bind_group_layout = activate_tiles_pipeline.get_bind_group_layout(0);
 
         Self {
             activate_tiles_bind_group_layout,
             activate_tiles_pipeline,
+            depth_compare_sampler,
         }
     }
 
@@ -40,25 +50,18 @@ impl TilesPipeline {
         depth_view: &wgpu::TextureView,
         config: &wgpu::SurfaceConfiguration,
     ) -> wgpu::Buffer {
+        let size = glam::UVec2::new(config.width, config.height);
         let tiles = glam::UVec2::new(config.width.div_ceil(16), config.height.div_ceil(16));
 
-        let depth_compare_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("depth_compare_sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToBorder,
-            address_mode_v: wgpu::AddressMode::ClampToBorder,
-            compare: Some(wgpu::CompareFunction::Equal),
-            border_color: Some(wgpu::SamplerBorderColor::OpaqueBlack),
-            ..Default::default()
-        });
         let active_tile_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("active_tile_buffer"),
             size: (tiles.x * tiles.y).div_ceil(32) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        let width_in_tiles_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("width_in_tiles_buffer"),
-            contents: bytemuck::bytes_of(&tiles.x),
+        let size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("size_buffer"),
+            contents: bytemuck::cast_slice(size.as_ref()),
             usage: wgpu::BufferUsages::STORAGE,
         });
 
@@ -72,7 +75,7 @@ impl TilesPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&depth_compare_sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.depth_compare_sampler),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -80,7 +83,7 @@ impl TilesPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: width_in_tiles_buffer.as_entire_binding(),
+                    resource: size_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -94,7 +97,7 @@ impl TilesPipeline {
             pass.set_pipeline(&self.activate_tiles_pipeline);
             pass.set_bind_group(0, &activate_tiles_bind_group, &[]);
 
-            pass.dispatch_workgroups(tiles.x, tiles.y, 1);
+            pass.dispatch_workgroups(tiles.x.div_ceil(2), tiles.y.div_ceil(2), 1);
         }
 
         active_tile_buffer
