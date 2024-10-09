@@ -89,10 +89,10 @@ fn prefixSum(
             chunks[index].x += sum + carry;
         }
 
+        workgroupBarrier();
+
         if local_index == WORKGROUP_SIZE - 1 {
             carry += val + sum;
         }
-
-        workgroupBarrier();
     }
 }
