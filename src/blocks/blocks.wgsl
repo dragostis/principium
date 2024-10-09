@@ -138,7 +138,7 @@ fn genFaces(@builtin(local_invocation_index) local_index: u32) {
         let chunk_len = chunk.x - chunk_start;
 
         let unpacked = unpack4xU8(chunk.y);
-        if unpacked.w == 1 {
+        if unpacked.w != 1 {
             continue;
         }
 

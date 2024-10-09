@@ -6,6 +6,9 @@ var<storage, read_write> chunks: array<vec2<u32>>;
 var<storage> chunks_len: u32;
 @group(0)
 @binding(2)
+var<storage> eye: vec3<f32>;
+@group(0)
+@binding(3)
 var<storage> clip_from_world_with_margin: mat4x4<f32>;
 
 const WORKGROUP_SIZE = 256u;
@@ -26,10 +29,12 @@ fn cullChunks(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let max_dist = max(abs(clip_mid.x), max(abs(clip_mid.y), abs(clip_mid.z)));
 
-    if max_dist > 1.0 {
-        unpacked.w = 1u;
-        chunks[global_id.x].y = pack4xU8(unpacked);
-    }
+    let is_culled = max_dist > 1.0;
+    let has_small_faces = length(chunk_mid - eye) > 128.0;
+
+    unpacked.w = (u32(has_small_faces) + 1) & (u32(is_culled) - 1);
+
+    chunks[global_id.x].y = pack4xU8(unpacked);
 }
 
 

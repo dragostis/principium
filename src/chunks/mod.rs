@@ -56,6 +56,7 @@ impl ChunksPipeline {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         region: &Region,
+        eye: glam::Vec3,
         clip_from_world_with_margin: glam::Mat4,
     ) -> (wgpu::Buffer, wgpu::Buffer) {
         let chunk_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -66,6 +67,11 @@ impl ChunksPipeline {
         let chunks_len_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("chunks_buffer"),
             contents: bytemuck::bytes_of(&(region.chunks().len() as u32)),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let eye_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("eye_buffer"),
+            contents: bytemuck::cast_slice(eye.extend(0.0).as_ref()),
             usage: wgpu::BufferUsages::STORAGE,
         });
         let clip_from_world_with_margin_buffer =
@@ -89,6 +95,10 @@ impl ChunksPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
+                    resource: eye_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
                     resource: clip_from_world_with_margin_buffer.as_entire_binding(),
                 },
             ],

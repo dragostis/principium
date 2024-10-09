@@ -265,6 +265,7 @@ impl ApplicationHandler for App {
                     &self.device,
                     &mut encoder,
                     &self.region,
+                    self.camera.eye,
                     self.camera
                         .clip_from_world_with_margin(aspect_ratio, 8.0 * 3.0f32.sqrt()),
                 );
